@@ -11,7 +11,7 @@ emcc -std=c99 -O2 -D_GNU_SOURCE=1 %SRCS% -o dist\prince.js ^
   -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS=["png"] ^
   -s ASYNCIFY -s ASYNCIFY_STACK_SIZE=65536 ^
   -s ALLOW_MEMORY_GROWTH=1 ^
-  -s EXPORTED_RUNTIME_METHODS=["FS"] -lidbfs.js ^
+  -s EXPORTED_FUNCTIONS=["_main","_web_send_key"] -s EXPORTED_RUNTIME_METHODS=["FS"] -lidbfs.js ^
   --preload-file data@/data --preload-file SDLPoP.ini@/SDLPoP.ini -lm
 
 if errorlevel 1 (

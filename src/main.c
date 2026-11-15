@@ -20,6 +20,21 @@ The authors of this program may be contacted at https://forum.princed.org
 
 #include "common.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+
+EMSCRIPTEN_KEEPALIVE
+void web_send_key(int scancode, int pressed) {
+	SDL_Event ev;
+	SDL_zero(ev);
+	ev.type = pressed ? SDL_KEYDOWN : SDL_KEYUP;
+	ev.key.state = pressed ? SDL_PRESSED : SDL_RELEASED;
+	ev.key.keysym.scancode = (SDL_Scancode)scancode;
+	ev.key.keysym.sym = SDL_GetKeyFromScancode((SDL_Scancode)scancode);
+	SDL_PushEvent(&ev);
+}
+#endif
+
 
 #ifdef __amigaos4__
 static const char version[] = "\0$VER: SDLPoP " SDLPOP_VERSION " (" __AMIGADATE__ ")";
