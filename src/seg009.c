@@ -1251,18 +1251,61 @@ int get_char_width(byte character) {
 	return width;
 }
 
+// Decodifica un carácter UTF-8 y mapea tildes/ñ/signos españoles a ASCII imprimible.
+static byte utf8_next_ascii(const char** text_pos) {
+	const byte* p = (const byte*)(*text_pos);
+	byte c = *p++;
+	if (c < 0x80) {
+		*text_pos = (const char*)p;
+		return c;
+	}
+	if (c == 0xC2 && *p != '\0') {
+		byte c2 = *p++;
+		*text_pos = (const char*)p;
+		if (c2 == 0xA1) return '!'; // ¡
+		if (c2 == 0xBF) return '?'; // ¿
+		return ' ';
+	}
+	if (c == 0xC3 && *p != '\0') {
+		byte c2 = *p++;
+		*text_pos = (const char*)p;
+		switch (c2) {
+			case 0x80: case 0x81: case 0x82: case 0x84: return 'A';
+			case 0x88: case 0x89: case 0x8A: case 0x8B: return 'E';
+			case 0x8C: case 0x8D: case 0x8E: case 0x8F: return 'I';
+			case 0x91: return 'N'; // Ñ
+			case 0x92: case 0x93: case 0x94: case 0x96: return 'O';
+			case 0x99: case 0x9A: case 0x9B: case 0x9C: return 'U';
+			case 0xA0: case 0xA1: case 0xA2: case 0xA4: return 'a';
+			case 0xA8: case 0xA9: case 0xAA: case 0xAB: return 'e';
+			case 0xAC: case 0xAD: case 0xAE: case 0xAF: return 'i';
+			case 0xB1: return 'n'; // ñ
+			case 0xB2: case 0xB3: case 0xB4: case 0xB6: return 'o';
+			case 0xB9: case 0xBA: case 0xBB: case 0xBC: return 'u';
+			default: return ' ';
+		}
+	}
+	// Otros multibyte UTF-8
+	while ((*p & 0xC0) == 0x80) ++p;
+	*text_pos = (const char*)p;
+	return ' ';
+}
+
 // seg009:3E99
 int find_linebreak(const char* text,int length,int break_width,int x_align) {
 	int curr_char_pos = 0;
-	short last_break_pos = 0; // in characters
+	short last_break_pos = 0; // in bytes
 	short curr_line_width = 0; // in pixels
 	const char* text_pos = text;
 	while (curr_char_pos < length) {
-		curr_line_width += get_char_width(*text_pos);
+		const char* next_pos = text_pos;
+		byte curr_char = utf8_next_ascii(&next_pos);
+		int char_bytes = (int)(next_pos - text_pos);
+		if (curr_char_pos + char_bytes > length) char_bytes = length - curr_char_pos;
+		curr_line_width += get_char_width(curr_char);
 		if (curr_line_width <= break_width) {
-			++curr_char_pos;
-			char curr_char = *text_pos;
-			text_pos++;
+			curr_char_pos += char_bytes;
+			text_pos += char_bytes;
 			if (curr_char == '\n') {
 				return curr_char_pos;
 			}
@@ -1276,7 +1319,7 @@ int find_linebreak(const char* text,int length,int break_width,int x_align) {
 		} else {
 			if (last_break_pos == 0) {
 				// If the first word is wider than break_width then break it.
-				return curr_char_pos;
+				return curr_char_pos > 0 ? curr_char_pos : char_bytes;
 			} else {
 				// Otherwise break at the last space.
 				return last_break_pos;
@@ -1290,9 +1333,9 @@ int find_linebreak(const char* text,int length,int break_width,int x_align) {
 int get_line_width(const char* text,int length) {
 	int width = 0;
 	const char* text_pos = text;
-	while (--length >= 0) {
-		width += get_char_width(*text_pos);
-		text_pos++;
+	const char* end = text + length;
+	while (text_pos < end) {
+		width += get_char_width(utf8_next_ascii(&text_pos));
 	}
 	return width;
 }
@@ -1318,9 +1361,9 @@ int draw_text_line(const char* text,int length) {
 	//hide_cursor();
 	int width = 0;
 	const char* text_pos = text;
-	while (--length >= 0) {
-		width += draw_text_character(*text_pos);
-		text_pos++;
+	const char* end = text + length;
+	while (text_pos < end) {
+		width += draw_text_character(utf8_next_ascii(&text_pos));
 	}
 	//show_cursor();
 	return width;
@@ -1332,8 +1375,7 @@ int draw_cstring(const char* string) {
 	int width = 0;
 	const char* text_pos = string;
 	while ('\0' != *text_pos) {
-		width += draw_text_character(*text_pos);
-		text_pos++;
+		width += draw_text_character(utf8_next_ascii(&text_pos));
 	}
 	//show_cursor();
 	return width;
@@ -3764,7 +3806,9 @@ void process_events() {
 				switch(event.button.button) {
 					case SDL_BUTTON_LEFT:
 						if (!is_menu_shown) {
+#ifndef __EMSCRIPTEN__
 							last_key_scancode = SDL_SCANCODE_BACKSPACE;
+#endif
 						} else {
 							mouse_clicked = true;
 						}
